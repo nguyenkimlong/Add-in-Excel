@@ -132,8 +132,9 @@ namespace Add_in
                      <button id='btntrans_vn' label='Xuất File Translation_vn' image='M' size='large' onAction='OnPrintTransVn' tag='File' />
                      <button id='btntrans_en' label='Xuất File Translation_en' image='M' size='large' onAction='OnPrintTransEn' tag='File' />
                     </group>    
-                    
-                  
+                       <group id='SampleGroup3' label='File Setting'>
+                        <button id='btnsetting' label='Xuất File Setting' image='M' size='large' onAction='OnPrintSetting' tag='File' />
+                      </group> 
                 </tab>
                 </tabs>
             </ribbon>
@@ -158,6 +159,10 @@ namespace Add_in
         public void OnPrintTransEn(IRibbonControl control)
         {
             EventLogFile("OnPrintTransEn");
+        }
+        public void OnPrintSetting(IRibbonControl control)
+        {
+            EventLogFile("OnPrintSetting");
         }
 
         public void EventLogFile(string typeLog)
@@ -201,6 +206,11 @@ namespace Add_in
                 }
             }
 
+            string name = ActiveSheet.Name;
+            if (name.IndexOf("ctg") >= 0)
+            {
+                name = ActiveSheet.Name.ToString().Substring(name.IndexOf("ctg") + 3);
+            }
             switch (typeLog)
             {
                 case "OnPrintClass":
@@ -210,15 +220,16 @@ namespace Add_in
                     }
                 case "OnPrintTransVn":
                     {
-                        WriteTransVN(model, ActiveSheet.Name, valuedefault, nameTitle);
+                        WriteTransVN(model, name, valuedefault, nameTitle);
                         break;
                     }
                 case "OnPrintTransEn":
                     {
-                        WriteTransEN(model, ActiveSheet.Name, valuedefault, nameTitle);
+                        WriteTransEN(model, name, valuedefault, nameTitle);
                         break;
                     }
                 default:
+                    WriteSetting(model, ActiveSheet.Name, valuedefault, nameTitle);
                     break;
             }
         }
@@ -234,13 +245,129 @@ namespace Add_in
                 throw;
             }
         }
+        void WriteSetting(List<ModelClass> logdata, string name, Dictionary<string, string> valueDefault, string nameTitle)
+        {
+            try
+            {
+                string nameFile = (name.IndexOf("ctg") >= 0) ? Char.ToLowerInvariant(name[name.IndexOf("ctg") + 3]) + name.Substring(name.IndexOf("ctg") + 4) : name;
 
+                var path = "D:\\" + "\\" + nameFile + "Setting.js";
+                if (File.Exists(path))
+                {
+                    File.WriteAllText(path, String.Empty);
+                }
+                using (StreamWriter w = File.AppendText(path))
+                {
+                    string nameFirst = "";
+                    if (name.IndexOf("ctg") >= 0)
+                    {
+                        nameFirst = name.ToString().Substring(name.IndexOf("ctg") + 3 );
+                        nameFirst = Char.ToLowerInvariant(nameFirst[0]) + nameFirst.Substring(1);
+                    }
+                    string valueString = "\n";
+                    valueString += $"var {nameFirst}Setting = null ; \n";
+                    valueString += $"function {nameFirst}InitSetting() \n";
+                    valueString += "{\n";
+                    valueString += $"{nameFirst}Setting = \n";
+                    valueString += "{ \n";
+                    valueString += "view : { \n";
+                    valueString += "module: \'other\', \n" +
+                                 $"formName: '{nameFirst}', \n" +
+                                $"gridName: 'grv{nameFirst}', \n" +
+                                $"entityName: 'FN_{nameFirst}', \n " +
+                                "}, \n";
+                    valueString += $"grid{Char.ToUpper(nameFirst[0]) + nameFirst.Substring(1)}: {"{"} \n";
+                    valueString += "options: { \n";
+                    valueString += "\t height: 474 \n";
+                    valueString += "}, \n";
+                    valueString += "columns: [ \n";
+                    List<string> fieldRequire = new List<string>();
+
+                    foreach (var item in logdata)
+                    {
+                        string refField = Char.ToLowerInvariant(item.ColumnName[0]) + item.ColumnName.Substring(1, 1).ToLower() + item.ColumnName.Substring(2);
+
+                        string fieldNull = item.Nulls == "x" ? "false" : "true";
+                        if (item.FK == "x")
+                        {
+                            string refTable = Char.ToLowerInvariant(item.ReferenceTable[0]) + item.ReferenceTable.Substring(1);
+
+                            valueString += "{" + $" field: '{ refField}' , name: {nameFirst}Translation.{item.ColumnName.ToUpper()},width: 300, controlType: 'Combobox' ,editable: true,IsRequired : {fieldNull} , ";
+                            valueString += "combobox: { \n";
+                            valueString += "condition: \"it.Active.ToString() == \\\"Active\\\"\", \n";
+                            valueString += $"tableName:\"{item.ReferenceTable}\", \n";
+                            valueString += $"baseOn:\"{refTable}Data.{(refField).Substring(0, item.ColumnName.Length - 2) }Name\" , \n";
+                            valueString += "dataValueField : \"id\" , \n";
+                            valueString += $"dataTextField : \"{(refField).Substring(0, item.ColumnName.Length - 2)}Name\" , \n";
+                            valueString += "columns :[ \n";
+                            valueString += "{" + $"field: \"{refField}\", width:100 " + "}, \n";
+                            valueString += "{" + $"field: \"{(refField).Substring(0, item.ColumnName.Length - 2)}Name\", width:100 " + "} ,\n";
+                            valueString += "] \n";
+                            valueString += "} \n";
+
+
+                            valueString += "}, \n";
+                        }
+                        else if (item.DataType == "enum")
+                        {
+                            valueString += "{" + $" field: '{refField}' , name: {nameFirst}Translation.{item.ColumnName.ToUpper()},width: 300, controlType: 'CheckBox' ,editable: true,IsRequired : {fieldNull} ";
+                            valueString += "}, \n";
+                        }
+                        else if (item.DataType == "datetime")
+                        {
+                            valueString += "{" + $" field: '{refField}' , name: {nameFirst}Translation.{item.ColumnName.ToUpper()},width: 150, controlType: 'DateTime' ,editable: true,IsRequired : {fieldNull} ";
+                            valueString += "}, \n";
+                        }
+                        else if (item.DataType == "integer")
+                        {
+                            valueString += "{" + $" field: '{refField}' , name: {nameFirst}Translation.{item.ColumnName.ToUpper()},width: 200, controlType: 'Numeric' ,editable: true,IsRequired : {fieldNull} ";
+                            valueString += "}, \n";
+                        }
+                        else
+                        {
+                            valueString += "{" + $" field: '{refField}' , name: {nameFirst}Translation.{item.ColumnName.ToUpper()},width: 300, controlType: 'TextBox' ,editable: true,IsRequired : {fieldNull} ";
+                            valueString += "}, \n";
+                        }
+
+                        if (item.Nulls != "x")
+                        {
+                            fieldRequire.Add(refField);
+                        }
+
+                    }
+                    valueString += "], \n";
+                    valueString += "}, \n";
+                    valueString += "valuelist: {}, \n";
+                    valueString += "options: {}, \n";
+                    valueString += "required: [ \n";
+                    valueString += "\"" + String.Join("\",\"", fieldRequire) + "\" \n";
+                    valueString += "] ,\n";
+                    valueString += " validate: { \n";
+                    foreach (var item in fieldRequire)
+                    {
+                        valueString += $"{item} : " + "{" + "required : true }, \n";
+                    }
+                    valueString += "} \n";
+                    valueString += "} \n";
+                    valueString += "} \n";
+                    w.Write(valueString);
+                }
+
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
 
         void WriteTransVN(List<ModelClass> logdata, string name, Dictionary<string, string> valueDefault, string nameTitle)
         {
             try
             {
-                var path = "D:\\" + "\\" + name + "Translation_vn.js";
+                string nameFile = Char.ToLowerInvariant(name[0]) + name.Substring(1);
+                var path = "D:\\" + "\\" + nameFile + "Translation_vn.js";
+                List<string> fieldRequire = new List<string>();
                 if (File.Exists(path))
                 {
                     File.WriteAllText(path, String.Empty);
@@ -249,12 +376,18 @@ namespace Add_in
                 {
 
                     string valueString = "\n";
-                    valueString += $"var {name}Translation = " + "{";
+                    valueString += $"var {nameFile}Translation = " + "{";
                     foreach (var item in logdata)
                     {
                         valueString += "\n";
                         valueString += $"\t {item.ColumnName.ToUpper()} : \"{item.Description}\" ,";
+                        valueString += "\n";
+                        if (item.Nulls != "x")
+                        {
+                            valueString += $"\t ERR_{item.ColumnName.ToUpper()}_REQUIRED : \"{item.Description} không được bỏ trống\" ,";
+                        }
                     }
+                    valueString += $"\n TITLE: \"{nameTitle}\",\n\t UNACTIVE: \"Ngưng hoạt động\" ,\n\t BTN_QUERY: \"Truy vấn\", \n\t BTN_SEARCH: \"Tra cứu\",  \n\t TOTAL: \"Tổng\", \n\t INPUT_SEARCH: \"Tìm kiếm\", \n\t BTN_FILTER: \"Lọc\", \n\t SUCCESS: \"Cập nhật thành công\" ";
                     valueString += "\n }";
                     w.Write(valueString);
                 }
@@ -270,7 +403,8 @@ namespace Add_in
         {
             try
             {
-                var path = "D:\\" + "\\" + name + "Translation_en.js";
+                string nameFile = Char.ToLowerInvariant(name[0]) + name.Substring(1);
+                var path = "D:\\" + "\\" + nameFile + "Translation_en.js";
                 if (File.Exists(path))
                 {
                     File.WriteAllText(path, String.Empty);
@@ -279,12 +413,18 @@ namespace Add_in
                 {
 
                     string valueString = "\n";
-                    valueString += $"var {name}Translation = " + "{";
+                    valueString += $"var {nameFile}Translation = " + "{";
                     foreach (var item in logdata)
                     {
                         valueString += "\n";
                         valueString += $"\t {item.ColumnName.ToUpper()} : \"{item.ColumnName}\" ,";
+                        valueString += "\n";
+                        if (item.Nulls != "x")
+                        {
+                            valueString += $"\t ERR_{item.ColumnName.ToUpper()}_REQUIRED : \"ERR {item.ColumnName.ToUpper()} REQUIRED\" ,";
+                        }
                     }
+                    valueString += "\n TITLE: \"Category\",\n\t UNACTIVE: \"unActive\" ,\n\t BTN_QUERY: \"query\", \n\t BTN_SEARCH: \"search\",  \n\t TOTAL: \"total\", \n\t INPUT_SEARCH: \"search\", \n\t BTN_FILTER: \"FILTER\", \n\t SUCCESS:\"Add Success\" ";
                     valueString += "\n }";
                     w.Write(valueString);
                 }
